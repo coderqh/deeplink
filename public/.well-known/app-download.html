@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>应用跳转检测</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 2rem;
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 1.5rem;
+    }
+    
+    #openAppBtn {
+      padding: 0.8rem 2rem;
+      font-size: 1rem;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    #openAppBtn:hover {
+      background-color: #45a049;
+    }
+    
+    .status {
+      margin-top: 1.5rem;
+      color: #666;
+      height: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>应用跳转测试</h1>
+    <button id="openAppBtn">打开应用</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    // 配置参数 - 根据实际情况修改
+    const config = {
+      // 应用的URL Scheme或Universal Link
+      appUrl: 'mobilestore://path?param1=value1',
+      // 应用下载页面URL
+      downloadUrl: 'https://app.it.csg.cn:30975/nfdwgs',
+      // 检测超时时间(毫秒)，建议500-2000之间
+      timeout: 1000
+    };
+
+    // 状态变量
+    let isRedirected = false;
+    let timer = null;
+
+    // DOM元素
+    const openAppBtn = document.getElementById('openAppBtn');
+    const statusElement = document.getElementById('status');
+
+    // 更新状态显示
+    function updateStatus(text) {
+      statusElement.textContent = text;
+    }
+
+    // 清理定时器
+    function clearDetectionTimer() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    // 尝试打开应用
+    function tryOpenApp() {
+      // 重置状态
+      isRedirected = false;
+      updateStatus('正在尝试打开应用...');
+      
+      // 记录当前时间用于后续计算
+      const startTime = Date.now();
+      
+      // 尝试打开应用
+      window.location.href = config.appUrl;
+      
+      // 对于iOS设备，也可以尝试使用iframe方式
+      if (navigator.userAgent.match(/(iPhone|iPod|iPad)/i)) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = config.appUrl;
+        document.body.appendChild(iframe);
+        
+        // 一段时间后移除iframe
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 500);
+      }
+      
+      // 设置定时器检测是否跳转成功
+      timer = setTimeout(() => {
+        // 如果还没有跳转成功，并且没有被重定向，则跳转到下载页
+        if (!isRedirected) {
+          updateStatus('无法打开应用，正在跳转到下载页面...');
+          window.location.href = config.downloadUrl;
+          isRedirected = true;
+        }
+      }, config.timeout);
+      
+      // 监听页面可见性变化 - 应用打开后页面会失去焦点
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // 监听页面隐藏事件
+      document.addEventListener('pagehide', handlePageHide);
+    }
+
+    // 处理页面可见性变化
+    function handleVisibilityChange() {
+      // 如果页面被隐藏，说明应用可能被成功打开
+      if (document.hidden || document.visibilityState === 'hidden') {
+        isRedirected = true;
+        clearDetectionTimer();
+        updateStatus('应用已打开');
+      }
+    }
+
+    // 处理页面隐藏事件
+    function handlePageHide() {
+      isRedirected = true;
+      clearDetectionTimer();
+      updateStatus('页面已隐藏，应用可能已打开');
+    }
+
+    // 按钮点击事件
+    openAppBtn.addEventListener('click', tryOpenApp);
+
+    // 页面卸载时清理事件监听
+    window.addEventListener('unload', () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('pagehide', handlePageHide);
+      clearDetectionTimer();
+    });
+  </script>
+</body>
+</html>
